@@ -1,0 +1,610 @@
+openapi: 3.0.3
+info:
+  title: Donut Bank API
+  description: >
+    REST API for bank account handling: multi-currency accounts, credits, debits,
+    currency exchange, and transaction history. See design.md for the rationale
+    behind the schema and error-handling conventions used here.
+  version: "0.1.0"
+servers:
+  - url: /api
+
+security:
+  - bearerAuth: []
+
+tags:
+  - name: Auth
+  - name: Accounts
+  - name: Money Movement
+  - name: Transactions
+  - name: Reference Data
+
+paths:
+  /auth/login:
+    post:
+      tags: [Auth]
+      summary: Exchange credentials for a JWT
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/LoginRequest"
+      responses:
+        "200":
+          description: Authenticated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LoginResponse"
+        "401":
+          $ref: "#/components/responses/ProblemDetail"
+
+  /users/me:
+    get:
+      tags: [Auth]
+      summary: Current user identity, for the SPA to bootstrap
+      responses:
+        "200":
+          description: Current user
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/User"
+        "401":
+          $ref: "#/components/responses/ProblemDetail"
+
+  /accounts:
+    get:
+      tags: [Accounts]
+      summary: List current user's accounts
+      responses:
+        "200":
+          description: Accounts belonging to the authenticated user
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Account"
+    post:
+      tags: [Accounts]
+      summary: Open a new account
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateAccountRequest"
+      responses:
+        "201":
+          description: Account created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Account"
+        "400":
+          $ref: "#/components/responses/ProblemDetail"
+
+  /accounts/{accountId}:
+    parameters:
+      - $ref: "#/components/parameters/AccountId"
+    get:
+      tags: [Accounts]
+      summary: Account detail, including balance and currency
+      responses:
+        "200":
+          description: Account detail
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Account"
+        "404":
+          $ref: "#/components/responses/ProblemDetail"
+
+  /accounts/{accountId}/balance-history:
+    parameters:
+      - $ref: "#/components/parameters/AccountId"
+      - name: from
+        in: query
+        schema:
+          type: string
+          format: date-time
+      - name: to
+        in: query
+        schema:
+          type: string
+          format: date-time
+    get:
+      tags: [Accounts]
+      summary: Time series of balance over time, for the line chart
+      responses:
+        "200":
+          description: Balance points ordered by time ascending
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/BalancePoint"
+        "404":
+          $ref: "#/components/responses/ProblemDetail"
+
+  /accounts/{accountId}/credits:
+    parameters:
+      - $ref: "#/components/parameters/AccountId"
+    post:
+      tags: [Money Movement]
+      summary: Add money to an account
+      description: >
+        No external dependency, so this always resolves synchronously to COMPLETED.
+        See design.md §2 for why a successful HTTP response does not imply the
+        underlying transaction status is COMPLETED in general (it is here, since
+        there's nothing that can be REJECTED/FAILED for a credit).
+      parameters:
+        - $ref: "#/components/parameters/IdempotencyKeyHeader"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreditRequest"
+      responses:
+        "201":
+          description: Transaction recorded
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Transaction"
+        "400":
+          $ref: "#/components/responses/ProblemDetail"
+        "404":
+          $ref: "#/components/responses/ProblemDetail"
+
+  /accounts/{accountId}/debits:
+    parameters:
+      - $ref: "#/components/parameters/AccountId"
+    post:
+      tags: [Money Movement]
+      summary: Debit money from an account
+      description: >
+        Triggers the external-system simulation call (httpstat.us) before the
+        account row lock is acquired. The HTTP response is always 2xx for a
+        well-formed request; the resulting transaction's status/reasonCode
+        carries the actual outcome (COMPLETED, FAILED, or REJECTED — e.g.
+        insufficient_funds).
+      parameters:
+        - $ref: "#/components/parameters/IdempotencyKeyHeader"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/DebitRequest"
+      responses:
+        "201":
+          description: Transaction recorded (status may be COMPLETED, FAILED, or REJECTED)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Transaction"
+        "400":
+          $ref: "#/components/responses/ProblemDetail"
+        "404":
+          $ref: "#/components/responses/ProblemDetail"
+
+  /exchanges:
+    post:
+      tags: [Money Movement]
+      summary: Exchange currency between two of the caller's accounts
+      description: >
+        Both accounts must belong to the authenticated user. Rate is looked up
+        server-side from exchange_rates, never client-supplied. On success,
+        writes one transactions row plus two ledger rows (one per account).
+      parameters:
+        - $ref: "#/components/parameters/IdempotencyKeyHeader"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ExchangeRequest"
+      responses:
+        "201":
+          description: Transaction recorded (status may be COMPLETED or REJECTED)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Transaction"
+        "400":
+          $ref: "#/components/responses/ProblemDetail"
+        "404":
+          $ref: "#/components/responses/ProblemDetail"
+
+  /accounts/{accountId}/transactions:
+    parameters:
+      - $ref: "#/components/parameters/AccountId"
+      - name: cursor
+        in: query
+        description: Opaque cursor, base64-encoded (created_at, id). Omit for the first page.
+        schema:
+          type: string
+      - name: limit
+        in: query
+        schema:
+          type: integer
+          default: 20
+          maximum: 100
+    get:
+      tags: [Transactions]
+      summary: Paginated transaction history for an account
+      description: >
+        Backed by the ledger table joined to transactions, newest first.
+        Only confirmed movements appear — FAILED/REJECTED attempts are not
+        surfaced here.
+      responses:
+        "200":
+          description: A page of ledger entries
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TransactionHistoryPage"
+        "404":
+          $ref: "#/components/responses/ProblemDetail"
+
+  /transactions/{transactionId}:
+    parameters:
+      - name: transactionId
+        in: path
+        required: true
+        schema:
+          type: integer
+          format: int64
+    get:
+      tags: [Transactions]
+      summary: Single transaction detail
+      description: Includes status/reasonCode and its resulting ledger entries (one, or two for an exchange).
+      responses:
+        "200":
+          description: Transaction detail
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TransactionDetail"
+        "404":
+          $ref: "#/components/responses/ProblemDetail"
+
+  /transactions/{transactionId}/report:
+    parameters:
+      - name: transactionId
+        in: path
+        required: true
+        schema:
+          type: integer
+          format: int64
+    get:
+      tags: [Transactions]
+      summary: Download a PDF summary of a transaction
+      responses:
+        "200":
+          description: PDF report
+          content:
+            application/pdf:
+              schema:
+                type: string
+                format: binary
+        "404":
+          $ref: "#/components/responses/ProblemDetail"
+
+  /exchange-rates:
+    get:
+      tags: [Reference Data]
+      summary: Current fixed exchange rates
+      responses:
+        "200":
+          description: All seeded exchange rate pairs
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/ExchangeRate"
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  parameters:
+    AccountId:
+      name: accountId
+      in: path
+      required: true
+      schema:
+        type: integer
+        format: int64
+    IdempotencyKeyHeader:
+      name: Idempotency-Key
+      in: header
+      required: true
+      schema:
+        type: string
+        maxLength: 64
+
+  responses:
+    ProblemDetail:
+      description: >
+        RFC 7807 Problem Details. Reserved for the request itself being
+        invalid (bad auth, not-your-account, malformed body, validation
+        failure) — business declines (insufficient funds, etc.) are not
+        modeled as errors; see the Transaction schema's status/reasonCode.
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/ProblemDetail"
+
+  schemas:
+    CurrencyCode:
+      type: string
+      enum: [EUR, USD, SEK, GBP, VND]
+
+    User:
+      type: object
+      properties:
+        id:
+          type: integer
+          format: int64
+        username:
+          type: string
+      required: [id, username]
+
+    LoginRequest:
+      type: object
+      properties:
+        username:
+          type: string
+        password:
+          type: string
+      required: [username, password]
+
+    LoginResponse:
+      type: object
+      properties:
+        token:
+          type: string
+          description: JWT bearer token
+      required: [token]
+
+    Account:
+      type: object
+      properties:
+        id:
+          type: integer
+          format: int64
+        currency:
+          $ref: "#/components/schemas/CurrencyCode"
+        balance:
+          type: string
+          description: Decimal string, e.g. "1234.5600" — never a binary float
+        createdAt:
+          type: string
+          format: date-time
+      required: [id, currency, balance, createdAt]
+
+    CreateAccountRequest:
+      type: object
+      properties:
+        currency:
+          $ref: "#/components/schemas/CurrencyCode"
+      required: [currency]
+
+    BalancePoint:
+      type: object
+      properties:
+        at:
+          type: string
+          format: date-time
+        balance:
+          type: string
+      required: [at, balance]
+
+    CreditRequest:
+      type: object
+      properties:
+        amount:
+          type: string
+          description: Decimal string, must be > 0
+        idempotencyKey:
+          type: string
+          maxLength: 64
+        description:
+          type: string
+          maxLength: 255
+      required: [amount, idempotencyKey]
+
+    DebitRequest:
+      type: object
+      properties:
+        amount:
+          type: string
+          description: Decimal string, must be > 0
+        idempotencyKey:
+          type: string
+          maxLength: 64
+        description:
+          type: string
+          maxLength: 255
+      required: [amount, idempotencyKey]
+
+    ExchangeRequest:
+      type: object
+      properties:
+        fromAccountId:
+          type: integer
+          format: int64
+        toAccountId:
+          type: integer
+          format: int64
+        fromAmount:
+          type: string
+          description: Decimal string, in the source account's currency, must be > 0
+        idempotencyKey:
+          type: string
+          maxLength: 64
+      required: [fromAccountId, toAccountId, fromAmount, idempotencyKey]
+
+    TransactionType:
+      type: string
+      enum: [CREDIT, DEBIT, EXCHANGE]
+
+    TransactionStatus:
+      type: string
+      enum: [PENDING, COMPLETED, FAILED, REJECTED]
+
+    ReasonCode:
+      type: string
+      description: Set only when status is FAILED or REJECTED.
+      enum: [insufficient_funds, external_call_timeout, external_call_error]
+      nullable: true
+
+    Transaction:
+      type: object
+      description: The result of a credit/debit/exchange request — the attempt, not necessarily a confirmed movement.
+      properties:
+        id:
+          type: integer
+          format: int64
+        type:
+          $ref: "#/components/schemas/TransactionType"
+        accountId:
+          type: integer
+          format: int64
+        toAccountId:
+          type: integer
+          format: int64
+          nullable: true
+          description: Only set when type is EXCHANGE
+        amount:
+          type: string
+        status:
+          $ref: "#/components/schemas/TransactionStatus"
+        reasonCode:
+          $ref: "#/components/schemas/ReasonCode"
+        description:
+          type: string
+          nullable: true
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+      required: [id, type, accountId, amount, status, createdAt, updatedAt]
+
+    LedgerEntry:
+      type: object
+      description: One confirmed movement against one account. An exchange has two of these sharing the same transactionId.
+      properties:
+        id:
+          type: integer
+          format: int64
+        transactionId:
+          type: integer
+          format: int64
+        accountId:
+          type: integer
+          format: int64
+        direction:
+          type: string
+          enum: [CREDIT, DEBIT]
+        amount:
+          type: string
+        balanceAfter:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+      required: [id, transactionId, accountId, direction, amount, balanceAfter, createdAt]
+
+    TransactionDetail:
+      allOf:
+        - $ref: "#/components/schemas/Transaction"
+        - type: object
+          properties:
+            ledgerEntries:
+              type: array
+              items:
+                $ref: "#/components/schemas/LedgerEntry"
+          required: [ledgerEntries]
+
+    TransactionHistoryItem:
+      type: object
+      description: A ledger entry shaped for the history list, with its parent transaction's type/description joined in.
+      properties:
+        transactionId:
+          type: integer
+          format: int64
+        type:
+          $ref: "#/components/schemas/TransactionType"
+        direction:
+          type: string
+          enum: [CREDIT, DEBIT]
+        amount:
+          type: string
+        balanceAfter:
+          type: string
+        description:
+          type: string
+          nullable: true
+        createdAt:
+          type: string
+          format: date-time
+      required: [transactionId, type, direction, amount, balanceAfter, createdAt]
+
+    TransactionHistoryPage:
+      type: object
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/TransactionHistoryItem"
+        nextCursor:
+          type: string
+          nullable: true
+          description: Opaque cursor for the next page; null when there are no more results
+      required: [items, nextCursor]
+
+    ExchangeRate:
+      type: object
+      properties:
+        baseCurrency:
+          $ref: "#/components/schemas/CurrencyCode"
+        quoteCurrency:
+          $ref: "#/components/schemas/CurrencyCode"
+        rate:
+          type: string
+          description: "1 base = rate * quote"
+        updatedAt:
+          type: string
+          format: date-time
+      required: [baseCurrency, quoteCurrency, rate, updatedAt]
+
+    ProblemDetail:
+      type: object
+      properties:
+        type:
+          type: string
+          format: uri
+        title:
+          type: string
+        status:
+          type: integer
+        detail:
+          type: string
+        instance:
+          type: string
+          format: uri
+      required: [title, status]
