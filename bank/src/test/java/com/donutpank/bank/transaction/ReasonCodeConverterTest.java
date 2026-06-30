@@ -3,6 +3,8 @@ package com.donutpank.bank.transaction;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import com.donutpank.bank.paymentorder.ReasonCode;
+import com.donutpank.bank.paymentorder.ReasonCodeConverter;
 import org.junit.jupiter.api.Test;
 
 class ReasonCodeConverterTest {

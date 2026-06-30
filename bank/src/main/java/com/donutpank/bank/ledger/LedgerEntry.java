@@ -1,7 +1,7 @@
 package com.donutpank.bank.ledger;
 
 import com.donutpank.bank.account.Account;
-import com.donutpank.bank.transaction.Transaction;
+import com.donutpank.bank.paymentorder.PaymentOrder;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
@@ -44,7 +44,7 @@ public class LedgerEntry {
     @NonNull
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
     @JoinColumn(name = "transaction_id", nullable = false)
-    private Transaction transaction;
+    private PaymentOrder paymentOrder;
 
     @NonNull
     @ManyToOne(fetch = FetchType.LAZY, optional = false)

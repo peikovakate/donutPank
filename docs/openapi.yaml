@@ -17,6 +17,7 @@ tags:
   - name: Accounts
   - name: Money Movement
   - name: Transactions
+  - name: Payment Orders
   - name: Reference Data
 
 paths:
@@ -152,11 +153,11 @@ paths:
               $ref: "#/components/schemas/CreditRequest"
       responses:
         "201":
-          description: Transaction recorded
+          description: PaymentOrder recorded
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/Transaction"
+                $ref: "#/components/schemas/PaymentOrder"
         "400":
           $ref: "#/components/responses/ProblemDetail"
         "404":
@@ -184,11 +185,11 @@ paths:
               $ref: "#/components/schemas/DebitRequest"
       responses:
         "201":
-          description: Transaction recorded (status may be COMPLETED, FAILED, or REJECTED)
+          description: PaymentOrder recorded (status may be COMPLETED, FAILED, or REJECTED)
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/Transaction"
+                $ref: "#/components/schemas/PaymentOrder"
         "400":
           $ref: "#/components/responses/ProblemDetail"
         "404":
@@ -212,11 +213,11 @@ paths:
               $ref: "#/components/schemas/ExchangeRequest"
       responses:
         "201":
-          description: Transaction recorded (status may be COMPLETED or REJECTED)
+          description: PaymentOrder recorded (status may be COMPLETED or REJECTED)
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/Transaction"
+                $ref: "#/components/schemas/PaymentOrder"
         "400":
           $ref: "#/components/responses/ProblemDetail"
         "404":
@@ -253,38 +254,38 @@ paths:
         "404":
           $ref: "#/components/responses/ProblemDetail"
 
-  /transactions/{transactionId}:
+  /payment-orders/{paymentOrderId}:
     parameters:
-      - name: transactionId
+      - name: paymentOrderId
         in: path
         required: true
         schema:
           type: integer
           format: int64
     get:
-      tags: [Transactions]
-      summary: Single transaction detail
+      tags: [Payment Orders]
+      summary: Payment order detail
       description: Includes status/reasonCode and its resulting ledger entries (one, or two for an exchange).
       responses:
         "200":
-          description: Transaction detail
+          description: PaymentOrder detail
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/TransactionDetail"
+                $ref: "#/components/schemas/PaymentOrderDetail"
         "404":
           $ref: "#/components/responses/ProblemDetail"
 
-  /transactions/{transactionId}/report:
+  /payment-orders/{paymentOrderId}/report:
     parameters:
-      - name: transactionId
+      - name: paymentOrderId
         in: path
         required: true
         schema:
           type: integer
           format: int64
     get:
-      tags: [Transactions]
+      tags: [Payment Orders]
       summary: Download a PDF summary of a transaction
       responses:
         "200":
@@ -417,13 +418,10 @@ components:
         amount:
           type: string
           description: Decimal string, must be > 0
-        idempotencyKey:
-          type: string
-          maxLength: 64
         description:
           type: string
           maxLength: 255
-      required: [amount, idempotencyKey]
+      required: [amount]
 
     DebitRequest:
       type: object
@@ -431,13 +429,10 @@ components:
         amount:
           type: string
           description: Decimal string, must be > 0
-        idempotencyKey:
-          type: string
-          maxLength: 64
         description:
           type: string
           maxLength: 255
-      required: [amount, idempotencyKey]
+      required: [amount]
 
     ExchangeRequest:
       type: object
@@ -451,10 +446,7 @@ components:
         fromAmount:
           type: string
           description: Decimal string, in the source account's currency, must be > 0
-        idempotencyKey:
-          type: string
-          maxLength: 64
-      required: [fromAccountId, toAccountId, fromAmount, idempotencyKey]
+      required: [fromAccountId, toAccountId, fromAmount]
 
     TransactionType:
       type: string
@@ -470,7 +462,7 @@ components:
       enum: [insufficient_funds, external_call_timeout, external_call_error]
       nullable: true
 
-    Transaction:
+    PaymentOrder:
       type: object
       description: The result of a credit/debit/exchange request — the attempt, not necessarily a confirmed movement.
       properties:
@@ -496,13 +488,11 @@ components:
         description:
           type: string
           nullable: true
-        createdAt:
-          type: string
-          format: date-time
         updatedAt:
           type: string
           format: date-time
-      required: [id, type, accountId, amount, status, createdAt, updatedAt]
+          description: Time of transaction finalized. 
+      required: [id, type, accountId, amount, status, updatedAt]
 
     LedgerEntry:
       type: object
@@ -529,9 +519,9 @@ components:
           format: date-time
       required: [id, transactionId, accountId, direction, amount, balanceAfter, createdAt]
 
-    TransactionDetail:
+    PaymentOrderDetail:
       allOf:
-        - $ref: "#/components/schemas/Transaction"
+        - $ref: "#/components/schemas/PaymentOrder"
         - type: object
           properties:
             ledgerEntries:

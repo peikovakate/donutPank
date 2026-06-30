@@ -7,6 +7,10 @@ import com.donutpank.bank.account.AccountRepository;
 import com.donutpank.bank.currency.Currency;
 import com.donutpank.bank.currency.CurrencyRepository;
 import com.donutpank.bank.user.User;
+import com.donutpank.bank.paymentorder.PaymentOrder;
+import com.donutpank.bank.paymentorder.PaymentOrderRepository;
+import com.donutpank.bank.paymentorder.PaymentOrderStatus;
+import com.donutpank.bank.paymentorder.PaymentOrderType;
 import com.donutpank.bank.user.UserRepository;
 import java.math.BigDecimal;
 import org.junit.jupiter.api.BeforeEach;
@@ -15,10 +19,10 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.data.jpa.test.autoconfigure.DataJpaTest;
 
 @DataJpaTest
-class TransactionRepositoryTest {
+class PaymentOrderRepositoryTest {
 
     @Autowired
-    private TransactionRepository transactionRepository;
+    private PaymentOrderRepository transactionRepository;
 
     @Autowired
     private AccountRepository accountRepository;
@@ -50,29 +54,29 @@ class TransactionRepositoryTest {
 
     @Test
     void findByIdempotencyKeyFindsTheOriginalRowAndNothingForAnUnknownKey() {
-        Transaction transaction = transactionRepository.save(Transaction.builder()
-                .type(TransactionType.DEBIT)
+        PaymentOrder transaction = transactionRepository.save(PaymentOrder.builder()
+                .type(PaymentOrderType.DEBIT)
                 .account(ownerSourceAccount)
                 .amount(new BigDecimal("5.0000"))
-                .status(TransactionStatus.COMPLETED)
+                .status(PaymentOrderStatus.COMPLETED)
                 .idempotencyKey("key-1")
                 .build());
 
         assertThat(transactionRepository.findByIdempotencyKey("key-1"))
                 .get()
-                .extracting(Transaction::getId)
+                .extracting(PaymentOrder::getId)
                 .isEqualTo(transaction.getId());
         assertThat(transactionRepository.findByIdempotencyKey("missing-key")).isEmpty();
     }
 
     @Test
     void findByIdAndOwnerMatchesEitherSourceOrDestinationAccountOwnerOnly() {
-        Transaction exchange = transactionRepository.save(Transaction.builder()
-                .type(TransactionType.EXCHANGE)
+        PaymentOrder exchange = transactionRepository.save(PaymentOrder.builder()
+                .type(PaymentOrderType.EXCHANGE)
                 .account(ownerSourceAccount)
                 .toAccount(ownerDestinationAccount)
                 .amount(new BigDecimal("5.0000"))
-                .status(TransactionStatus.COMPLETED)
+                .status(PaymentOrderStatus.COMPLETED)
                 .idempotencyKey("key-2")
                 .build());
 

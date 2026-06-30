@@ -8,9 +8,12 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
 public interface LedgerRepository extends JpaRepository<LedgerEntry, Long> {
+
+    List<LedgerEntry> findByPaymentOrderId(Long paymentOrderId);
+
     @Query("""
             select le from LedgerEntry le
-            join fetch le.transaction t
+            join fetch le.paymentOrder p
             where le.account.id = :accountId
             order by le.createdAt desc, le.id desc
             """)
@@ -18,7 +21,7 @@ public interface LedgerRepository extends JpaRepository<LedgerEntry, Long> {
 
     @Query("""
             select le from LedgerEntry le
-            join fetch le.transaction t
+            join fetch le.paymentOrder p
             where le.account.id = :accountId
               and (le.createdAt < :cursorCreatedAt
                    or (le.createdAt = :cursorCreatedAt and le.id < :cursorId))

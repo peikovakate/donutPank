@@ -1,4 +1,4 @@
-package com.donutpank.bank.transaction;
+package com.donutpank.bank.paymentorder;
 
 import com.donutpank.bank.account.Account;
 import jakarta.persistence.Column;
@@ -33,7 +33,7 @@ import org.hibernate.annotations.UpdateTimestamp;
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
-public class Transaction {
+public class PaymentOrder {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
@@ -42,15 +42,13 @@ public class Transaction {
     @NonNull
     @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 16)
-    private TransactionType type;
+    private PaymentOrderType type;
 
-    /** For CREDIT/DEBIT, the account acted on; for EXCHANGE, the source account. */
     @NonNull
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
     @JoinColumn(name = "account_id", nullable = false)
     private Account account;
 
-    /** Only set when type is EXCHANGE — the destination account. */
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "to_account_id")
     private Account toAccount;
@@ -63,9 +61,8 @@ public class Transaction {
     @NonNull
     @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 16)
-    private TransactionStatus status;
+    private PaymentOrderStatus status;
 
-    /** Set only when status is FAILED or REJECTED. */
     @Column(name = "reason_code", length = 32)
     private ReasonCode reasonCode;
 
@@ -84,17 +81,17 @@ public class Transaction {
     private Instant updatedAt;
 
     public void markCompleted() {
-        this.status = TransactionStatus.COMPLETED;
+        this.status = PaymentOrderStatus.COMPLETED;
         this.reasonCode = null;
     }
 
     public void markFailed(ReasonCode reasonCode) {
-        this.status = TransactionStatus.FAILED;
+        this.status = PaymentOrderStatus.FAILED;
         this.reasonCode = reasonCode;
     }
 
     public void markRejected(ReasonCode reasonCode) {
-        this.status = TransactionStatus.REJECTED;
+        this.status = PaymentOrderStatus.REJECTED;
         this.reasonCode = reasonCode;
     }
 }

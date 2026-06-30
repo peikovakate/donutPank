@@ -1,4 +1,4 @@
-package com.donutpank.bank.transaction;
+package com.donutpank.bank.paymentorder;
 
 import jakarta.persistence.AttributeConverter;
 import jakarta.persistence.Converter;

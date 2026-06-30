@@ -6,10 +6,10 @@ import com.donutpank.bank.account.Account;
 import com.donutpank.bank.account.AccountRepository;
 import com.donutpank.bank.currency.Currency;
 import com.donutpank.bank.currency.CurrencyRepository;
-import com.donutpank.bank.transaction.Transaction;
-import com.donutpank.bank.transaction.TransactionRepository;
-import com.donutpank.bank.transaction.TransactionStatus;
-import com.donutpank.bank.transaction.TransactionType;
+import com.donutpank.bank.paymentorder.PaymentOrder;
+import com.donutpank.bank.paymentorder.PaymentOrderRepository;
+import com.donutpank.bank.paymentorder.PaymentOrderStatus;
+import com.donutpank.bank.paymentorder.PaymentOrderType;
 import com.donutpank.bank.user.User;
 import com.donutpank.bank.user.UserRepository;
 import java.math.BigDecimal;
@@ -29,7 +29,7 @@ class LedgerRepositoryTest {
     private LedgerRepository ledgerRepository;
 
     @Autowired
-    private TransactionRepository transactionRepository;
+    private PaymentOrderRepository transactionRepository;
 
     @Autowired
     private AccountRepository accountRepository;
@@ -55,15 +55,15 @@ class LedgerRepositoryTest {
     }
 
     private LedgerEntry creditEntry(Account targetAccount, String amount, String balanceAfter) {
-        Transaction transaction = transactionRepository.save(Transaction.builder()
-                .type(TransactionType.CREDIT)
+        PaymentOrder transaction = transactionRepository.save(PaymentOrder.builder()
+                .type(PaymentOrderType.CREDIT)
                 .account(targetAccount)
                 .amount(new BigDecimal(amount))
-                .status(TransactionStatus.COMPLETED)
+                .status(PaymentOrderStatus.COMPLETED)
                 .idempotencyKey(UUID.randomUUID().toString())
                 .build());
         return ledgerRepository.save(LedgerEntry.builder()
-                .transaction(transaction)
+                .paymentOrder(transaction)
                 .account(targetAccount)
                 .direction(Direction.CREDIT)
                 .amount(new BigDecimal(amount))
