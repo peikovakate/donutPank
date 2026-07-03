@@ -31,9 +31,12 @@ class ExchangeRateControllerTest {
     }
 
     @Test
-    void listRates_unauthenticated_returns401() throws Exception {
+    void listRates_unauthenticated_returnsRates() throws Exception {
+        when(exchangeRateRepository.findAllByOrderByBaseCurrencyCodeAscQuoteCurrencyCodeAsc())
+                .thenReturn(List.of());
+
         mockMvc.perform(get("/exchange-rates"))
-                .andExpect(status().isUnauthorized());
+                .andExpect(status().isOk());
     }
 
     @Test

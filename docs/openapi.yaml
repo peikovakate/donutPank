@@ -302,6 +302,7 @@ paths:
     get:
       tags: [Reference Data]
       summary: Current fixed exchange rates
+      security: []
       responses:
         "200":
           description: All seeded exchange rate pairs
