@@ -13,11 +13,13 @@ import com.donutpank.bank.paymentorder.PaymentOrderStatus;
 import com.donutpank.bank.paymentorder.PaymentOrderType;
 import com.donutpank.bank.security.CurrentUser;
 import com.donutpank.bank.security.JwtService;
+import com.donutpank.bank.testsupport.SecurityTestConfig;
 import java.time.Instant;
 import java.util.List;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
+import org.springframework.context.annotation.Import;
 import org.springframework.http.MediaType;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
@@ -25,6 +27,7 @@ import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 
 @WebMvcTest(MoneyMovementController.class)
+@Import(SecurityTestConfig.class)
 class MoneyMovementControllerTest {
 
     @Autowired MockMvc mockMvc;

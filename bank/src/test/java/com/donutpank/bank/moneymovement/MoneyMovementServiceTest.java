@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -41,9 +42,9 @@ class MoneyMovementServiceTest {
     private Account mockAccount(Long id, String currencyCode) {
         Account account = mock(Account.class);
         Currency currency = mock(Currency.class);
-        when(account.getId()).thenReturn(id);
-        when(currency.getCode()).thenReturn(currencyCode);
-        when(account.getCurrency()).thenReturn(currency);
+        lenient().when(account.getId()).thenReturn(id);
+        lenient().when(currency.getCode()).thenReturn(currencyCode);
+        lenient().when(account.getCurrency()).thenReturn(currency);
         return account;
     }
 
@@ -55,10 +56,21 @@ class MoneyMovementServiceTest {
     }
 
     private PaymentOrder completedOrder() {
+        Account account = mockAccount(ACCOUNT_ID, "EUR");
         PaymentOrder order = mock(PaymentOrder.class);
         when(order.getStatus()).thenReturn(PaymentOrderStatus.COMPLETED);
-        when(order.getAccount()).thenReturn(mockAccount(ACCOUNT_ID, "EUR"));
+        when(order.getAccount()).thenReturn(account);
         when(order.getAmount()).thenReturn(new BigDecimal("100.0000"));
+        return order;
+    }
+
+    private PaymentOrder failedOrder(ReasonCode reasonCode) {
+        Account account = mockAccount(ACCOUNT_ID, "EUR");
+        PaymentOrder order = mock(PaymentOrder.class);
+        lenient().when(order.getStatus()).thenReturn(PaymentOrderStatus.FAILED);
+        lenient().when(order.getAccount()).thenReturn(account);
+        lenient().when(order.getAmount()).thenReturn(new BigDecimal("50.0000"));
+        lenient().when(order.getReasonCode()).thenReturn(reasonCode);
         return order;
     }
 
@@ -91,11 +103,11 @@ class MoneyMovementServiceTest {
         PaymentOrder completed = completedOrder();
         when(accountRepository.findByIdAndUserId(ACCOUNT_ID, USER_ID)).thenReturn(Optional.of(account));
         when(attemptRecorder.insert(any(), any(), any(), any(), eq("key-1"), any())).thenReturn(pending);
-        when(executor.completeCredit(99L, ACCOUNT_ID, USER_ID, new BigDecimal("100"))).thenReturn(completed);
+        when(executor.completeCredit(99L, ACCOUNT_ID, USER_ID, new BigDecimal("100.0000"))).thenReturn(completed);
 
         service.credit(USER_ID, ACCOUNT_ID, "key-1", new CreditRequest("100", null));
 
-        verify(executor).completeCredit(99L, ACCOUNT_ID, USER_ID, new BigDecimal("100"));
+        verify(executor).completeCredit(99L, ACCOUNT_ID, USER_ID, new BigDecimal("100.0000"));
     }
 
     // --- debit ---
@@ -116,20 +128,22 @@ class MoneyMovementServiceTest {
         when(accountRepository.findByIdAndUserId(ACCOUNT_ID, USER_ID)).thenReturn(Optional.of(account));
         when(attemptRecorder.insert(any(), any(), any(), any(), any(), any())).thenReturn(pending);
         when(preDebitCallClient.call()).thenReturn(ExternalCallOutcome.SUCCESS);
-        when(executor.completeDebit(99L, ACCOUNT_ID, USER_ID, new BigDecimal("50"))).thenReturn(completed);
+        when(executor.completeDebit(99L, ACCOUNT_ID, USER_ID, new BigDecimal("50.0000"))).thenReturn(completed);
 
         service.debit(USER_ID, ACCOUNT_ID, "key-1", new DebitRequest("50", null));
 
-        verify(executor).completeDebit(99L, ACCOUNT_ID, USER_ID, new BigDecimal("50"));
+        verify(executor).completeDebit(99L, ACCOUNT_ID, USER_ID, new BigDecimal("50.0000"));
     }
 
     @Test
     void debit_preDebitCallTimesOut_failsTransaction() {
         Account account = mockAccount(ACCOUNT_ID, "EUR");
         PaymentOrder pending = pendingOrder(99L);
+        PaymentOrder failed = failedOrder(ReasonCode.EXTERNAL_CALL_TIMEOUT);
         when(accountRepository.findByIdAndUserId(ACCOUNT_ID, USER_ID)).thenReturn(Optional.of(account));
         when(attemptRecorder.insert(any(), any(), any(), any(), any(), any())).thenReturn(pending);
         when(preDebitCallClient.call()).thenReturn(ExternalCallOutcome.TIMEOUT);
+        when(executor.failTransaction(99L, ReasonCode.EXTERNAL_CALL_TIMEOUT)).thenReturn(failed);
 
         service.debit(USER_ID, ACCOUNT_ID, "key-1", new DebitRequest("50", null));
 
@@ -140,9 +154,11 @@ class MoneyMovementServiceTest {
     void debit_preDebitCallErrors_failsTransaction() {
         Account account = mockAccount(ACCOUNT_ID, "EUR");
         PaymentOrder pending = pendingOrder(99L);
+        PaymentOrder failed = failedOrder(ReasonCode.EXTERNAL_CALL_ERROR);
         when(accountRepository.findByIdAndUserId(ACCOUNT_ID, USER_ID)).thenReturn(Optional.of(account));
         when(attemptRecorder.insert(any(), any(), any(), any(), any(), any())).thenReturn(pending);
         when(preDebitCallClient.call()).thenReturn(ExternalCallOutcome.ERROR);
+        when(executor.failTransaction(99L, ReasonCode.EXTERNAL_CALL_ERROR)).thenReturn(failed);
 
         service.debit(USER_ID, ACCOUNT_ID, "key-1", new DebitRequest("50", null));
 
@@ -180,10 +196,10 @@ class MoneyMovementServiceTest {
         when(accountRepository.findByIdAndUserId(20L, USER_ID)).thenReturn(Optional.of(to));
         when(attemptRecorder.insert(eq(PaymentOrderType.EXCHANGE), eq(from), eq(to), any(), eq("key-1"), any()))
                 .thenReturn(pending);
-        when(executor.completeExchange(99L, 10L, 20L, USER_ID, new BigDecimal("100"))).thenReturn(completed);
+        when(executor.completeExchange(99L, 10L, 20L, USER_ID, new BigDecimal("100.0000"))).thenReturn(completed);
 
         service.exchange(USER_ID, "key-1", new ExchangeRequest(10L, 20L, "100"));
 
-        verify(executor).completeExchange(99L, 10L, 20L, USER_ID, new BigDecimal("100"));
+        verify(executor).completeExchange(99L, 10L, 20L, USER_ID, new BigDecimal("100.0000"));
     }
 }
