@@ -7,6 +7,8 @@ import { provideStore } from '@ngrx/store';
 import { provideCharts, withDefaultRegisterables } from 'ng2-charts';
 
 import { routes } from './app.routes';
+import * as accountsEffects from './accounts/accounts.effects';
+import { accountsFeature } from './accounts/accounts.reducer';
 import * as authEffects from './auth/auth.effects';
 import { authInterceptor } from './auth/auth.interceptor';
 import { authFeature } from './auth/auth.reducer';
@@ -19,8 +21,9 @@ export const appConfig: ApplicationConfig = {
     provideStore({
       router: routerReducer,
       [authFeature.name]: authFeature.reducer,
+      [accountsFeature.name]: accountsFeature.reducer,
     }),
-    provideEffects(authEffects),
+    provideEffects(authEffects, accountsEffects),
     provideRouterStore(),
     provideCharts(withDefaultRegisterables()),
   ],
